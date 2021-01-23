@@ -13,7 +13,9 @@ func main() {
 	switch os.Args[1] {
 	case "make-input":
 		err := MakeInput()
-		fmt.Println(err)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 
