@@ -45,7 +45,7 @@ func MakeInput() error {
 		if len(runes) > 4 && runes[4] == '：' {
 			runes = runes[5:]
 		}
-		out.WriteString(string(runes))
+		out.WriteString(string(runes) + "\n")
 	}
 
 	if err := ioutil.WriteFile("resources/input.txt",
