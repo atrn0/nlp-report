@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/csv"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -16,7 +18,52 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
+	case "frequency":
+		err := CountFrequency()
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
+}
+
+func CountFrequency() error {
+	inputFilename := "resources/wakati.txt"
+	content, err := ioutil.ReadFile(inputFilename)
+	if err != nil {
+		return err
+	}
+
+	words := strings.Split(
+		strings.Replace(string(content), "\n", "", -1),
+		" ",
+	)
+	wordCountMap := map[string]int{}
+	for _, word := range words {
+		wordCountMap[word]++
+	}
+
+	outputFileName := "resources/frequency.csv"
+	outputFile, err := os.OpenFile(outputFileName, os.O_CREATE|os.O_RDWR, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	w := csv.NewWriter(outputFile)
+	records := make([][]string, 0, len(wordCountMap)+1)
+	records = append(records, []string{"word", "frequency", "rate"})
+	for k, v := range wordCountMap {
+		rate := float64(v) / float64(len(words))
+		records = append(records, []string{
+			k,
+			strconv.Itoa(v),
+			strconv.FormatFloat(rate, 'f', 3, 64),
+		})
+	}
+	if err := w.WriteAll(records); err != nil {
+		return err
+	}
+
+	return w.Error()
 }
 
 func MakeInput() error {
