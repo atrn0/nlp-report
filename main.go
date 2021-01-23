@@ -5,7 +5,9 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,46 +15,95 @@ import (
 
 func main() {
 	switch os.Args[1] {
+	//task1
 	case "make-input":
 		err := MakeInput()
 		if err != nil {
 			fmt.Println(err)
 		}
+	//task1
 	case "frequency":
 		err := CountFrequency()
 		if err != nil {
 			fmt.Println(err)
 		}
+	//task2
 	case "bigram-eng":
 		err := BiGramEng()
+		if err != nil {
+			fmt.Println(err)
+		}
+	//task3
+	case "wakati-eng":
+		err := WakatiUniGramEng()
 		if err != nil {
 			fmt.Println(err)
 		}
 	}
 }
 
-func BiGramEng() error {
-	inputFilename := "resources/eng_input.txt"
-	content, err := ioutil.ReadFile(inputFilename)
+func WakatiUniGramEng() error {
+	root := "resources/text0"
+	learnInputFiles, err := ioutil.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	learnInputFilenames := make([]string, 0, len(learnInputFiles))
+	for _, f := range learnInputFiles {
+		learnInputFilenames = append(learnInputFilenames, path.Join(root, f.Name()))
+	}
+	unigramCount, wordsCount, err := NgramEng(learnInputFilenames, 1)
 	if err != nil {
 		return err
 	}
 
-	replacer := strings.NewReplacer(
-		"\n", " ", ",", " ",
-		".", " ", "(", " ",
-		")", " ", "[", " ",
-		"]", " ", ":", " ",
-		";", " ",
-	)
-	words := strings.Split(replacer.Replace(string(content)), " ")
-	bigramCount := map[string]int{}
-	for i := 0; i < len(words)-1; i++ {
-		if words[i] == "" || words[i+1] == "" {
-			continue
+	//文字で始まる単語のリストへのmap
+	runeWordMap := map[rune][]string{}
+	for w, _ := range unigramCount {
+		r := []rune(w)
+		runeWordMap[r[0]] = append(runeWordMap[r[0]], w)
+	}
+
+	testInputFilename := "resources/wakati_test_eng_input.txt"
+	content, err := ioutil.ReadFile(testInputFilename)
+	if err != nil {
+		return err
+	}
+	testInputRunes := []rune(string(content))
+
+	//インデックス以下の最大の生成確率と生成文字列を保存するdpテーブル
+	dp := make([]struct {
+		prob  float64 //生成確率
+		words []string
+	}, len(testInputRunes), len(testInputRunes))
+	for i, r := range testInputRunes {
+		//TODO: 未知文字
+		for _, possibleWord := range runeWordMap[r] {
+			nextIndex := i + len(possibleWord)
+			if nextIndex > len(testInputRunes)-1 {
+				continue
+			}
+			if string(testInputRunes[i:nextIndex]) != possibleWord {
+				continue
+			}
+			newLogProb := dp[i].prob + math.Log(float64(unigramCount[possibleWord])/float64(wordsCount))
+			if dp[nextIndex].prob < newLogProb || dp[nextIndex].prob == 0 {
+				dp[nextIndex].prob = newLogProb
+				dp[nextIndex].words = append(dp[i].words, possibleWord)
+			}
 		}
-		bigram := strings.ToLower(fmt.Sprintf("%s,%s", words[i], words[i+1]))
-		bigramCount[bigram]++
+	}
+
+	fmt.Println(dp[len(dp)-1])
+
+	return nil
+}
+
+func BiGramEng() error {
+	inputFilename := "resources/eng_input.txt"
+	bigramCount, _, err := NgramEng([]string{inputFilename}, 2)
+	if err != nil {
+		return err
 	}
 
 	outputFilename := "resources/bigram_eng.csv"
@@ -72,6 +123,47 @@ func BiGramEng() error {
 		return err
 	}
 	return w.Error()
+}
+
+//NgramEng Ngramのmapと全単語数を返す
+func NgramEng(inputFiles []string, n int) (map[string]int, int, error) {
+	ngramCount := map[string]int{}
+	wordsCount := 0
+	for _, file := range inputFiles {
+		content, err := ioutil.ReadFile(file)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		replacer := strings.NewReplacer(
+			"\n", " ", ",", " ",
+			".", " ", "(", " ",
+			")", " ", "[", " ",
+			"]", " ", ":", " ",
+			";", " ", "\"", " ",
+			"'", " ", "/", " ",
+			"-", " ", "*", " ",
+		)
+
+		//ピリオドの数を数える(文の終端)
+		periodCount := strings.Count(string(content), ".")
+		ngramCount["."] += periodCount
+		wordsCount += periodCount
+
+		words := []string{}
+		for _, word := range strings.Split(replacer.Replace(string(content)), " ") {
+			if word == "" || word[0] == '@' || word[0] == '<' {
+				continue
+			}
+			words = append(words, word)
+		}
+		wordsCount += len(words)
+		for i := 0; i < len(words)-n+1; i++ {
+			key := strings.ToLower(strings.Join(words[i:i+n], ","))
+			ngramCount[key]++
+		}
+	}
+	return ngramCount, wordsCount, nil
 }
 
 func CountFrequency() error {
