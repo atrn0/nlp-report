@@ -23,7 +23,55 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
+	case "bigram-eng":
+		err := BiGramEng()
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
+}
+
+func BiGramEng() error {
+	inputFilename := "resources/eng_input.txt"
+	content, err := ioutil.ReadFile(inputFilename)
+	if err != nil {
+		return err
+	}
+
+	replacer := strings.NewReplacer(
+		"\n", " ", ",", " ",
+		".", " ", "(", " ",
+		")", " ", "[", " ",
+		"]", " ", ":", " ",
+		";", " ",
+	)
+	words := strings.Split(replacer.Replace(string(content)), " ")
+	bigramCount := map[string]int{}
+	for i := 0; i < len(words)-1; i++ {
+		if words[i] == "" || words[i+1] == "" {
+			continue
+		}
+		bigram := strings.ToLower(fmt.Sprintf("%s,%s", words[i], words[i+1]))
+		bigramCount[bigram]++
+	}
+
+	outputFilename := "resources/bigram_eng.csv"
+	outputFile, err := os.OpenFile(outputFilename, os.O_CREATE|os.O_RDWR, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer outputFile.Close()
+
+	w := csv.NewWriter(outputFile)
+	records := make([][]string, 0, len(bigramCount)+1)
+	records = append(records, []string{"bigram", "count"})
+	for bigram, count := range bigramCount {
+		records = append(records, []string{bigram, strconv.Itoa(count)})
+	}
+	if err := w.WriteAll(records); err != nil {
+		return err
+	}
+	return w.Error()
 }
 
 func CountFrequency() error {
@@ -47,6 +95,7 @@ func CountFrequency() error {
 	if err != nil {
 		return err
 	}
+	defer outputFile.Close()
 
 	w := csv.NewWriter(outputFile)
 	records := make([][]string, 0, len(wordCountMap)+1)
