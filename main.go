@@ -69,32 +69,67 @@ func WakatiUniGramEng() error {
 	if err != nil {
 		return err
 	}
-	testInputRunes := []rune(string(content))
+	testInputRunes := []rune(strings.ToLower(string(content)))
+	fmt.Println("input: " + string(testInputRunes))
 
 	//インデックス以下の最大の生成確率と生成文字列を保存するdpテーブル
 	dp := make([]struct {
-		prob  float64 //生成確率
-		words []string
+		prob  float64  //生成確率
+		words []string //そのインデックスの文字で終わる文字列
 	}, len(testInputRunes), len(testInputRunes))
 	for i, r := range testInputRunes {
-		//TODO: 未知文字
+		//未知語
+		if i > 0 && dp[i-1].prob == 0 {
+			if i > 1 {
+				w := make([]string, len(dp[i-2].words))
+				copy(w, dp[i-2].words)
+				w = append(w, "UW:"+string(testInputRunes[i-1]))
+				dp[i-1].words = w
+			} else {
+				dp[i-1].words = []string{"UW:" + string(testInputRunes[i-1])}
+			}
+			dp[i-1].prob = math.Log(float64(len(runeWordMap[r])) / float64(wordsCount))
+			if i-1 > 0 {
+				dp[i-1].prob += dp[i-2].prob
+			}
+		}
+
 		for _, possibleWord := range runeWordMap[r] {
+			//index: i             nextIndex
+			//runes: <possibleWord>
 			nextIndex := i + len(possibleWord)
-			if nextIndex > len(testInputRunes)-1 {
+			if nextIndex > len(testInputRunes) {
 				continue
 			}
 			if string(testInputRunes[i:nextIndex]) != possibleWord {
 				continue
 			}
-			newLogProb := dp[i].prob + math.Log(float64(unigramCount[possibleWord])/float64(wordsCount))
-			if dp[nextIndex].prob < newLogProb || dp[nextIndex].prob == 0 {
-				dp[nextIndex].prob = newLogProb
-				dp[nextIndex].words = append(dp[i].words, possibleWord)
+			newLogProb := math.Log(float64(unigramCount[possibleWord]) / float64(wordsCount))
+			if i > 0 {
+				newLogProb += dp[i-1].prob
+			}
+			if dp[nextIndex-1].prob < newLogProb || dp[nextIndex-1].prob == 0 {
+				dp[nextIndex-1].prob = newLogProb
+				if i == 0 {
+					dp[nextIndex-1].words = []string{possibleWord}
+				} else {
+					w := make([]string, len(dp[i-1].words))
+					copy(w, dp[i-1].words)
+					w = append(w, possibleWord)
+					dp[nextIndex-1].words = w
+				}
 			}
 		}
 	}
 
-	fmt.Println(dp[len(dp)-1])
+	fmt.Println("wakati: " + strings.Join(dp[len(dp)-1].words, " "))
+
+	ansFilename := "resources/wakati_test_eng_input_ans.txt"
+	ans, err := ioutil.ReadFile(ansFilename)
+	if err != nil {
+		return err
+	}
+	fmt.Println("ans: " + string(ans))
 
 	return nil
 }
